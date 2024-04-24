@@ -1,0 +1,313 @@
+---
+title: "Quarto Assignment - Unicef Data"
+subtitle: "Mapping Childhood Deprivation: A Focus on African Nations"
+author: "Sharol Dsouza"
+date: last-modified
+date format: "MM-DD-YYYY"
+format: 
+   html:
+     embed-resources: true
+     theme: cosmo
+     smooth-scroll: true
+     font-family: "Open Sans"
+     toc: true
+     toc-title: Table of Contents
+     toc-depth: 3
+     toc-location: left
+     code-fold: true
+     code-line-numbers: true
+     code-tools: true
+     code-link: true
+     code-highlight-style: solarized-dark        
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Report Summary
+
+This report illuminates the link between economic hardship and child deprivation in Africa, emphasizing regional disparities and the crucial need for gender-focused interventions. Data for this report was sourced from **UNICEF**. 
+
+### Overall Highlights
+
+- **Severe Child Deprivation in Africa**: A map reveals widespread child deprivation in Africa, with many children lacking basic necessities like food, education, and healthcare.
+Regional Disparity: African countries like Madagascar, Ethiopia, Chad, Mozambique, and Angola show particularly high levels of child deprivation.
+
+- **Economic Hardship and Deprivation (GDP)**: A scatterplot indicates a link between lower GDP and higher child deprivation rates in Africa, highlighting economic hardship as a contributing factor.
+
+- **Life Expectancy in Africa**: A box and whisker plot reveals a median life expectancy around 75% across African countries (2011-2018), with variations and outliers exposing areas where improvement is needed.
+
+- **GNI and Child Deprivation**: A scatter plot suggests an inverse relationship - higher GNI is associated with lower child deprivation levels in Africa (2011-2018).
+
+- **Gender Disparity**: Intriguingly, some African countries show near-equal deprivation rates for boys and girls, emphasizing the need for gender-focused interventions to ensure equal access to opportunities and resources.
+
+### The Story of Percentage of Children Suffering, Life Expectancy, GDP, and Population, for 2011-2018 for African Continent
+
+### Libraries
+This code block starts the process of preparing and visualizing the data. It establishes the foundation for analysis and ensures that the visual representations will be generated correctly. Individual graphs may have additional code for tailored data preparation to create specific visual effects.
+```{r}
+#| label: libraries 
+#| include: true
+#| echo: true 
+library(ggplot2)
+library(ggthemes)
+library(gganimate)
+library(patchwork)
+library(scales)
+library(leaflet)
+library(magrittr)
+library(dplyr)
+library(tidyverse) 
+library(xml2)
+library(downlit)
+library(sf)
+library(viridis)
+library(rnaturalearth) 
+library(countrycode)  
+library(ggrepel) 
+library(readr)
+library(viridis)
+library(plotly)
+library(rworldmap)
+
+unicef_indicator_1 <- read_csv("unicef_indicator_1.csv")
+unicef_metadata <- read_csv("unicef_metadata.csv")
+metadata_from_2011_18<- unicef_metadata %>% 
+  filter(year>=2011 & year<=2018)
+indicator_child<- unicef_indicator_1 %>%
+  filter(indicator == "Percentage children suffering at least five deprivation. Homogeneous moderate standards")
+data_join<- full_join(metadata_from_2011_18, indicator_child)
+data_join <- data_join %>%
+  rename(
+    LifeExp = `Life expectancy at birth, total (years)`, 
+    total_pop = `Population, total`,  
+    GDP_per_cap = `GDP per capita (constant 2015 US$)`,  
+    GNI = `GNI (current US$)`,  
+    Infla_cons_price = `Inflation, consumer prices (annual %)`,  
+    Mill_exp = `Military expenditure (% of GDP)`  
+    )
+world <- rnaturalearth::ne_countries(scale = "small", returnclass = "sf")
+
+map_data_join <- full_join(data_join, world, by = c("alpha_3_code" = "iso_a3"))
+
+africa_data <- map_data_join %>%
+  filter(continent == "Africa") %>%  
+  mutate(sex = tolower(sex),  
+         sex = ifelse(sex == "m", "male", ifelse(sex == "f", "female", sex))) %>% 
+  filter(indicator == "Percentage children suffering at least five deprivation. Homogeneous moderate standards")
+sum(is.na(africa_data$geometry))
+```
+### World Map
+**Children Suffering at Least 5 Deprivation**
+Child Deprivation Trends from 2011 – 2018
+
+The map below reveals the harsh realities faced by children, enduring at ***least five deprivations***. Each stroke of color represents children enduring profound hardship due to a lack of basic necessities like **nutritious food**, **education**, **healthcare**, **safe homes**, and **protection**, requiring urgent demand solutions. Among these, ***Africa*** stands out as a region where childhood hardship is particularly severe.
+```{r}
+#| label: world map
+#| include: true
+#| result: 'asis'
+#| echo: true
+merged_data <- dplyr::left_join(world, map_data_join, by = "geometry")
+world_map_1 <- ggplot(data = world) +
+  geom_sf(fill = "gray85", color = "black", size = 0.2) + 
+  geom_sf(data = merged_data, aes(geometry = geometry, fill = obs_value, text = paste("Country:", country, "\nObs Value:", obs_value)), size = 2) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", name = "Percentage") +
+  theme_minimal() +
+  labs(
+    title = "Percentage of Children Suffering at Least 5 Deprivation (2011–2018)",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  coord_sf() +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(hjust = 0.5),
+    legend.text = element_text(size = 10),
+    plot.background = element_rect(fill = "gray85"),
+    panel.background = element_rect(fill = "gray85")
+  )
+
+interactive_map <- ggplotly(world_map_1, tooltip = "text")  
+interactive_map
+```
+
+### The Pulse of Global Health: Life Expectancy Trends
+
+***Life expectancy*** across the globe takes shape over time through 2011-2018. Each data point whispers a story, revealing the **potential for a longer, healthier life** for all. By analyzing these trends, there comes an opportunity to improve health and national well-being.
+
+```{r}
+#| label: time series
+#| include: true
+#| result: 'asis'
+#| echo: true
+time_series_3 <- ggplot(map_data_join, aes(x = year, y = LifeExp, color = country)) +
+  geom_line() +
+  labs(title = "Life Expectancy Rate (2011-2018)", x = "Year", y = "GNI in USD") +
+  theme_minimal()
+
+ggplotly(time_series_3)
+```
+
+### Stolen Childhoods: A Crisis of Wellbeing in African Nations
+
+Casting a gaze across **African continents**, a stark reality emerges from the bar chart showing severe ***lack of well-being*** for many children.  The data, spanning 2011 to 2018, paints a concerning picture, with **Madagascar**, **Ethiopia**, **Chad**, **Mozambique**, and **Angola** ranking highest in terms of average observed child deprivation.
+
+```{r}
+#| label: bar diagram
+#| include: true
+#| result: 'asis'
+#| echo: true
+avg_obs_value <- africa_data %>%
+  group_by(name) %>%
+  summarise(avg_obs = mean(obs_value, na.rm = TRUE))
+
+p <- ggplot(data = avg_obs_value, aes(x = reorder(name, avg_obs), y = avg_obs, fill = avg_obs, text = paste("Country:", name, "\nAvg Obs Value:", round(avg_obs, 2)))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  
+  scale_fill_viridis_c(option = "viridis", name = "Avg Obs Value") +  
+  theme_minimal() +
+  labs(
+    title = "Average Child Deprivation for Countries in Africa (2011-2018)",
+    x = "Country",
+    y = "Average Observed Value"
+  ) +
+  theme(legend.position = "bottom",
+        plot.background = element_rect(fill = "gray85"),
+        panel.background = element_rect(fill = "gray85"),
+        axis.text.y = element_text(size = 8))
+
+ggplotly(p, tooltip = "text")
+```
+### Uneven Landscapes: Disparities in African Life Expectancy
+
+The box and whisker plot reveals a median ***life expectancy*** around **75%** across African countries (2011-2018). This central tendency indicates that half the countries experience life expectancies below this value. Variations and outliers within the plot highlight areas where life expectancy deviates from this median, **requiring improvements**.
+
+```{r}
+#| label: box plot
+#| include: true
+#| result: 'asis'
+#| echo: true
+box_plot <- ggplot(data = africa_data, aes(x = factor(year), y = LifeExp, text = paste("Year:", year, "\nLife Expectancy:", LifeExp))) +  
+  geom_boxplot(aes(fill = factor(year)), outlier.color = "red", outlier.size = 2) +
+  theme_minimal() +
+  labs(
+    title = "Life Expectancy at Birth Across African Countries (2011-2018)",
+    x = "Year",
+    y = "Life Expectancy (years)",
+    fill = "Year"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)  
+  )
+
+interactive_box_plot <- ggplotly(box_plot, tooltip = "text") 
+interactive_box_plot
+```
+### A Glimmer of Hope? GNI and Child Deprivation in Africa
+
+The scatterplot reveals a potential inverse relationship **between Gross National Income (GNI)** and child deprivation in African countries (2011-2018). This means that countries with ***higher GNI*** generally experience ***lower rates of child deprivation***.  However, this relationship isn't perfect, and some countries may deviate from this trend. Furthermore, a deeper understanding of the possible causes of this connection would identify unique circumstances, influencing the GNI of other individual countries within Africa.
+
+```{r}
+#| label: scatter plot 1
+#| include: true
+#| result: 'asis'
+#| echo: true
+avg_GNI <- africa_data %>%
+  group_by(name) %>%
+  summarise(avg_GNI = mean(GNI, na.rm = TRUE))  
+scatter_plot <- ggplot(data = africa_data, aes(x = year, y = GNI, color = name, text = paste("Country:", name, "\nGNI:", comma(GNI), "\nObs Value:", obs_value))) +  #
+  geom_point(size = 1) +  
+  theme_minimal() +  
+  labs(
+    title = "GNI for African Countries (2011-2018)",
+    x = "Year",
+    y = "GNI (USD)",
+    color = "Country"
+  ) +
+  theme(legend.position = "bottom") +
+  scale_y_continuous(labels = scales::dollar_format())  
+interactive_scatter_plot <- ggplotly(scatter_plot, tooltip = "text")  
+interactive_scatter_plot
+```
+### The Price of Inequality: Low GDP and Child Well-being in Africa
+
+On the other hand, the scatter plot paints a concerning picture for many African countries.  ***Lower Gross Domestic Product (GDP)*** appear to be linked to ***higher proportions of children experiencing deprivation***. This suggests that economic hardship within these nations might be a contributing factor to the struggle for child well-being, requiring urgent intervention to address the root causes of child deprivation and create a more equitable future for all African children.
+
+```{r}
+#| label: scatter plot 2
+#| include: true
+#| result: 'asis'
+#| echo: true
+africa_data_filtered <- africa_data %>%
+  filter(
+    !is.na(GDP_per_cap) &  
+    !is.na(obs_value)  
+  )
+scatter_plot3 <- ggplot(africa_data_filtered) +
+  aes(x = GDP_per_cap, y = obs_value, color = country, size = GDP_per_cap, text = paste("Country:", country, "<br>GDP per capita:", GDP_per_cap, "<br>Observed Value:", obs_value)) +  
+  geom_point(alpha=0.5) +  
+  facet_wrap(~ year) +  
+  scale_x_continuous(
+    limits = c(0, 20000),  
+    breaks = seq(0, 20000, by = 500),  
+    labels = scales::comma  
+  ) +
+  labs(
+    x = "GDP per capita (USD)",
+    y = "Observed Value",
+    title = "GDP v/s Child Deprivation for African Countries (2011-2018)"
+  ) +
+  theme_classic() +  
+  theme(
+    text = element_text(family = "Arial"),
+    plot.margin = margin(10, 10, 10, 10),  
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),  
+    plot.subtitle = element_text(size = 14), 
+    axis.title.x = element_text(size = 12),  
+    axis.title.y = element_text(size = 12), 
+    strip.text = element_text(size = 10)  
+  )
+
+scatter_plot3_plotly <- ggplotly(scatter_plot3, tooltip = "text")
+
+scatter_plot3_plotly
+```
+
+
+### Africa's Two Faces: Child Deprivation and the Fight for Gender Equality
+
+Furthermore, the data reveals a troubling disparity within Africa. Countries like Madagascar, Ethiopia, Chad, Mozambique, and Angola **(identified as the top 5 countries)** show particularly **high levels of child deprivation**. However, the graph also highlights a crucial point in many other African countries, where ***girls and boys face almost equal deprivation levels*** (2011-2018). This observation underlines the importance of gender-focused interventions, ensuring that all children, regardless of gender, have access to basic necessities and opportunities. 
+```{r}
+#| label: faceted line plot
+#| include: true
+#| result: 'asis'
+#| echo: true
+new_africa_data <- africa_data %>%
+  group_by(year, sex, country) %>%
+  summarise(
+    avg_obs_value = mean(obs_value, na.rm = TRUE),
+    .groups = "drop"  
+  ) 
+
+faceted_line_plot <- ggplot(data = new_africa_data, aes(x = year, y = avg_obs_value, color = sex, text = paste("Country:", country, "\nSex:", sex, "\nYear:", year, "\nAvg Obs Value:", avg_obs_value))) +
+  geom_line(size = 1) +  
+  geom_point(size = 1) +  
+  theme_minimal() +
+  labs(
+    title = "Sex Disparity Ratio - Child Deprivation Among African Countries (2011-2018)",
+    x = "Year",
+    y = "Average Observed Value",
+    color = "Sex"
+  ) +
+  facet_wrap(~sex) +  
+  theme(legend.position = "bottom")
+
+interactive_faceted_line_plot <- ggplotly(faceted_line_plot, tooltip = "text")
+interactive_faceted_line_plot
+```
+
+### Conclusions and Recommendations
+
+The data paints a ***sobering picture*** of a nation's prosperity hinges not just on economic growth, but on the well-being of its children. While lower GDPs correlate with higher child deprivation in Africa, the near-equal deprivation rates for girls and boys in some countries reveal a deeper issue.  To truly **flourish**, societies need not only **financial advancement** but also equitable **resource distribution** and **targeted investments** in children's health, education, and safety. By addressing the root causes of child deprivation and ensuring opportunities for all children, ***we can break the cycle of inequality*** and pave the way for a **brighter future for generations** to come.
+
